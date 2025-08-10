@@ -5,33 +5,101 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Post‑Cantorian RH — Single‑File Tester</title>
   <meta name="description" content="FTC/RSF falsifiability harness for RH — single‑file build" />
+  <!-- Tailwind (Play CDN) for quick styling -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 UMD (pinned) -->
   <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/recharts.min.js"></script>
+  <!-- Recharts UMD (pinned). If this fails, we fall back to a custom SVG chart. -->
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js"></script>
+  <!-- Babel for JSX in single-file mode -->
   <script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
+    .card { border: 1px solid rgba(0,0,0,.08); border-radius: 16px; background: #fff; }
+    .mono { font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; }
+  </style>
 </head>
 <body class="min-h-screen bg-neutral-100">
   <main class="max-w-7xl mx-auto p-6">
     <h1 class="text-3xl font-bold text-center mb-2">Post‑Cantorian RH Proof Tester</h1>
     <p class="text-center text-neutral-600 mb-6">FTC Recursive Integration · RSF Generation Symmetry · Single‑file</p>
+
     <div id="app"></div>
     <div id="diag" class="mt-4 mx-auto max-w-3xl text-xs text-neutral-600"></div>
+
     <footer class="mt-10 text-center text-xs text-neutral-500">
-      Built savage‑style: one <code>index.html</code>. Powered by React + Recharts + Tailwind CDNs.
+      Built savage‑style: one <code class="mono">index.html</code>. React + (Recharts or SVG fallback) + Tailwind CDNs.
     </footer>
   </main>
 
   <script type="text/babel" data-presets="react,env">
-    const { useState } = React;
-    const R = window.Recharts;
-    if (!R) {
-      const d = document.getElementById('diag');
-      if (d) d.innerHTML = '<span class="text-red-600">Recharts failed to load. Check CDN URL or network.</span>';
-      throw new Error('Recharts not loaded');
-    }
-    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } = R;
+    const { useState, useEffect } = React;
 
+    // --- Fallback SVG Line Chart (used if Recharts CDN fails) -----------------
+    function SimpleLineChart({ data, xKey, yKey, title, color = '#2563eb', height = 240, vlineAt = 0.5 }) {
+      if (!data || !data.length) {
+        return <div className="card p-4 text-sm text-neutral-500">No data yet…</div>;
+      }
+      const padL = 42, padR = 12, padT = 12, padB = 28;
+      const width = 400, innerW = width - padL - padR;
+      const innerH = height - padT - padB;
+      const xs = data.map(d => +d[xKey]);
+      const ys = data.map(d => +d[yKey]);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const xTo = x => padL + ( (x - minX) / (maxX - minX || 1) ) * innerW;
+      const yTo = y => padT + innerH - ( (y - minY) / (maxY - minY || 1) ) * innerH;
+      const path = data
+        .sort((a,b) => a[xKey] - b[xKey])
+        .map((d,i) => `${i?'L':'M'}${xTo(d[xKey]).toFixed(2)},${yTo(d[yKey]).toFixed(2)}`)
+        .join(' ');
+      const refX = xTo(Math.min(Math.max(vlineAt, minX), maxX));
+      const ticks = 4;
+      const xTicks = Array.from({length:ticks+1}, (_,i)=>minX + (i/ticks)*(maxX-minX));
+      const yTicks = Array.from({length:ticks+1}, (_,i)=>minY + (i/ticks)*(maxY-minY));
+
+      return (
+        <div className="card p-4">
+          <h3 className="text-lg font-semibold mb-3">{title}</h3>
+          <svg width="100%" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
+            <rect x="0" y="0" width={width} height={height} fill="#fff" rx="12" />
+            {/* Grid */}
+            {yTicks.map((t,i)=> (
+              <line key={i} x1={padL} x2={width-padR} y1={yTo(t)} y2={yTo(t)} stroke="#e5e7eb" strokeDasharray="3 3" />
+            ))}
+            {xTicks.map((t,i)=> (
+              <line key={`x${i}`} x1={xTo(t)} x2={xTo(t)} y1={padT} y2={height-padB} stroke="#f1f5f9" />
+            ))}
+            {/* Axes */}
+            <line x1={padL} x2={width-padR} y1={height-padB} y2={height-padB} stroke="#111827" strokeWidth="1" />
+            <line x1={padL} x2={padL} y1={padT} y2={height-padB} stroke="#111827" strokeWidth="1" />
+            {/* Reference line at sigma = 0.5 */}
+            <line x1={refX} x2={refX} y1={padT} y2={height-padB} stroke="#111827" strokeDasharray="4 4" />
+            {/* Line */}
+            <path d={path} fill="none" stroke={color} strokeWidth="2" />
+            {/* Ticks labels */}
+            {xTicks.map((t,i)=> (
+              <text key={`xt${i}`} x={xTo(t)} y={height-8} textAnchor="middle" fontSize="10" fill="#374151">{t.toFixed(2)}</text>
+            ))}
+            {yTicks.map((t,i)=> (
+              <text key={`yt${i}`} x={padL-6} y={yTo(t)+3} textAnchor="end" fontSize="10" fill="#374151">{t.toFixed(2)}</text>
+            ))}
+          </svg>
+        </div>
+      );
+    }
+
+    function Panel({ title, children }) {
+      return (
+        <div className="card p-4">
+          <h3 className="text-lg font-semibold mb-3">{title}</h3>
+          {children}
+        </div>
+      );
+    }
+
+    // --- Main App -------------------------------------------------------------
     function RHProofTester() {
       const [energyData, setEnergyData] = useState([]);
       const [convexityData, setConvexityData] = useState([]);
@@ -41,27 +109,36 @@
       const [maxDepth, setMaxDepth] = useState(20);
       const [tMax, setTMax] = useState(30);
       const [tau, setTau] = useState(0.001);
+      const [alwaysRoll, setAlwaysRoll] = useState(false);
+      const hasRecharts = !!window.Recharts;
 
-      const computeConfigurationSpace = depth => depth * depth + depth;
-      const computeRecursiveRealizations = (_s, sigma, t, depth) => {
-        const u = sigma - 0.5;
+      // If Recharts is available, pull components; otherwise noop and we render SVG fallback
+      const Rc = hasRecharts ? window.Recharts : null;
+
+      // --- Core FTC/RSF numeric model (toy) ----------------------------------
+      const computeConfigurationSpace = (depth) => depth * depth + depth; // quadratic + linear
+
+      const computeRecursiveRealizations = (_structure, sigma, t, depth) => {
+        const u = sigma - 0.5; // distance to critical line
         const base = Math.exp(-Math.abs(u) * depth);
         const osc = Math.cos(t / Math.sqrt(depth + 1));
         const mod = 1 / (1 + depth / 10);
-        const mult = Math.abs(u) > 0.01 ? 4 : 1;
+        const mult = Math.abs(u) > 0.01 ? 4 : 1; // quartet off-line
         return Math.max(0.001, Math.abs(base * osc * mod) * mult);
       };
-      const computeFractalDensity = (structure, sigma, t) => {
+
+      const computeFractalDensity = (structure, sigma, t, maxDepthLocal = maxDepth) => {
         let num = 0, den = 0;
-        for (let i = 1; i <= maxDepth; i++) {
+        for (let i = 1; i <= maxDepthLocal; i++) {
           const Fi = computeRecursiveRealizations(structure, sigma, t, i);
           const Gi = computeConfigurationSpace(i);
           const Di = Fi / Gi;
-          const w = 1 / i;
+          const w = 1 / i; // weighted avg
           num += Di * w; den += w;
         }
         return num / den;
       };
+
       const computeRecursiveDerivative = (sigma, t, h = 1e-3) => {
         let num = 0, den = 0;
         for (let n = 1; n <= maxDepth; n++) {
@@ -75,7 +152,9 @@
         }
         return num / den;
       };
-      const measure = t => Math.exp(-(t * t) / 100) * (1 + 0.1 * Math.sin(t / 5));
+
+      const measure = (t) => Math.exp(-(t * t) / 100) * (1 + 0.1 * Math.sin(t / 5));
+
       const energy = (sigma, tMaxLocal = tMax, pts = 200) => {
         let acc = 0;
         const dt = (2 * tMaxLocal) / pts;
@@ -86,8 +165,9 @@
         }
         return acc;
       };
+
       const energySecond = (sigma, tauLocal = tau) => {
-        const h = tauLocal;
+        const h = tauLocal || 1e-3;
         const Ep = energy(sigma + h);
         const E0 = energy(sigma);
         const Em = energy(sigma - h);
@@ -103,24 +183,84 @@
           lines.push('POST‑CANTORIAN RH PROOF FALSIFIABILITY TESTS');
           lines.push('=======================================================\n');
           lines.push(`Max Recursive Depth: ${maxDepth}`);
-          lines.push(`tMax: ${tMax}, τ: ${tau}\n`);
+          lines.push(`tMax: ${tMax}, \u03C4: ${tau}\n`);
+
           const sigmas = [0.1, 0.25, 0.4, 0.5, 0.6, 0.75, 0.9];
+
+          // Energy sweep
           const e = [];
           sigmas.forEach(s => { const v = energy(s, 20, 100); e.push({ sigma: s, energy: v }); lines.push(`E(${s}) = ${v.toFixed(6)}`); });
           setEnergyData(e);
-          const c = [];
+
+          // Convexity
           lines.push('\nConvexity (E\'\'):');
-          sigmas.forEach(s => { const v = energySecond(s); c.push({ sigma: s, secondDerivative: v }); lines.push(`E''(${s}) = ${v.toFixed(6)} ${v >= -0.1 ? '✓' : '✗'}`); });
+          const c = [];
+          sigmas.forEach(s => { const v = energySecond(s); c.push({ sigma: s, secondDerivative: v }); lines.push(`E''(${s}) = ${v.toFixed(6)} ${v >= -0.1 ? '\u2713' : '\u2717 FAILS'}`); });
           setConvexityData(c);
+
+          // Density
+          lines.push('\nFractal Density D_k(\u03C3):');
           const d = [];
-          lines.push('\nFractal Density D_k(σ):');
           sigmas.forEach(s => { const v = computeFractalDensity('energy', s, 0); d.push({ sigma: s, density: v }); lines.push(`D_k(${s}) = ${v.toFixed(6)}`); });
           setDensityData(d);
+
+          // RSF symmetry checks
+          lines.push('\nRSF Symmetry Checks:');
+          const symSigmas = [0.1, 0.2, 0.3, 0.4];
+          const symmetryVals = symSigmas.map(s => {
+            const a = computeFractalDensity('symmetry', s, 0);
+            const b = computeFractalDensity('symmetry', 1 - s, 0);
+            const delta = Math.abs(a - b);
+            lines.push(`\u0394(\u03C3=${s}, 1-\u03C3=${1-s}) = ${delta.toFixed(6)} ${delta < 0.05 ? '\u2713' : '\u2717'}`);
+            return { sigma: s, delta };
+          });
+
+          // Assess conditions
+          const convexityFails = c.some(v => v.secondDerivative < -0.1);
+          const symmetryFails = symmetryVals.some(v => v.delta > 0.05);
+          const energyMonotonic = e.every((val, i) => i === 0 || val.energy <= e[i-1].energy + 50);
+
+          lines.push('\nTEST 6: Falsifiability Summary');
+          if (convexityFails) lines.push('\u2717 PROOF FALSIFIED: FTC convexity condition violated');
+          if (symmetryFails) lines.push('\u2717 PROOF FALSIFIED: RSF generation symmetry broken');
+          if (!convexityFails && !symmetryFails) lines.push('\u2713 FTC/RSF conditions satisfied within numerical precision');
+          if (!energyMonotonic) lines.push('\u26A0\uFE0F Energy functional behavior inconsistent (non-monotone sweep)');
+
           setResults(lines.join('\n'));
           setIsComputing(false);
+
+          // Rick Roll trigger — only when conditions pass, or always if toggled
+          const shouldRoll = alwaysRoll || (!convexityFails && !symmetryFails && energyMonotonic);
+          if (shouldRoll) {
+            setTimeout(() => {
+              document.body.innerHTML = `
+                <div style="position:fixed;inset:0;background:#000">
+                  <iframe width="100%" height="100%"
+                    src="https://youtu.be/dQw4w9WgXcQ?autoplay=1&playsinline=1&start=43&loop=1"
+                    title="Never Gonna Give You Up" frameborder="0"
+                    allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen>
+                  </iframe>
+                </div>`;
+            }, 60000);
+          }
         }, 60);
       };
 
+      const copyResults = async () => { try { await navigator.clipboard.writeText(results || ''); } catch {} };
+      const downloadCSV = () => {
+        const rows = ['type,sigma,value']
+          .concat(energyData.map(r => `energy,${r.sigma},${r.energy}`))
+          .concat(convexityData.map(r => `secondDerivative,${r.sigma},${r.secondDerivative}`))
+          .concat(densityData.map(r => `density,${r.sigma},${r.density}`));
+        const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'ftc_rh_results.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      };
+
+      // --- UI ----------------------------------------------------------------
       return (
         <div>
           <div className="mb-6 flex flex-wrap items-center gap-3 justify-center">
@@ -128,69 +268,86 @@
               {isComputing ? 'Computing FTC…' : 'Run Tests'}
             </button>
             <label className="text-sm">Max Depth: <input type="number" min="5" max="50" value={maxDepth} onChange={e=>setMaxDepth(parseInt(e.target.value||'0',10))} className="w-20 px-2 py-1 border rounded ml-1"/></label>
+            <label className="text-sm">tMax: <input type="number" min="10" max="60" value={tMax} onChange={e=>setTMax(parseInt(e.target.value||'0',10))} className="w-20 px-2 py-1 border rounded ml-1"/></label>
+            <label className="text-sm">τ: <input type="number" step="0.001" min="0.000" max="0.100" value={tau} onChange={e=>setTau(parseFloat(e.target.value||'0'))} className="w-24 px-2 py-1 border rounded ml-1"/></label>
+            <button onClick={copyResults} className="px-3 py-2 rounded-lg border bg-white hover:bg-neutral-50">Copy Results</button>
+            <button onClick={downloadCSV} className="px-3 py-2 rounded-lg border bg-white hover:bg-neutral-50">Download CSV</button>
+            <label className="text-sm flex items-center gap-2 ml-2"><input type="checkbox" checked={alwaysRoll} onChange={e=>setAlwaysRoll(e.target.checked)} /> Always Rick Roll</label>
           </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <ChartCard title="FTC Energy Functional E(σ)">
-              <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={energyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="sigma" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <ReferenceLine x={0.5} stroke="#111827" strokeDasharray="4 4" label="σ = 1/2" />
-                  <Line type="monotone" dataKey="energy" stroke="#6366f1" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
-            <ChartCard title="Convexity E''(σ)">
-              <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={convexityData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="sigma" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <ReferenceLine x={0.5} stroke="#111827" strokeDasharray="4 4" label="σ = 1/2" />
-                  <Line type="monotone" dataKey="secondDerivative" stroke="#10b981" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
-            <ChartCard title="Fractal Density Dₖ(σ)">
-              <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={densityData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="sigma" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <ReferenceLine x={0.5} stroke="#111827" strokeDasharray="4 4" label="σ = 1/2" />
-                  <Line type="monotone" dataKey="density" stroke="#f59e0b" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
+            {hasRecharts ? (
+              <>
+                <div className="card p-4">
+                  <h3 className="text-lg font-semibold mb-3">FTC Energy Functional E(σ)</h3>
+                  <Rc.ResponsiveContainer width="100%" height={240}>
+                    <Rc.LineChart data={energyData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <Rc.CartesianGrid strokeDasharray="3 3" />
+                      <Rc.XAxis dataKey="sigma" />
+                      <Rc.YAxis />
+                      <Rc.Tooltip />
+                      <Rc.Legend />
+                      <Rc.ReferenceLine x={0.5} stroke="#111827" strokeDasharray="4 4" label="σ = 1/2" />
+                      <Rc.Line type="monotone" dataKey="energy" stroke="#6366f1" strokeWidth={2} dot={false} />
+                    </Rc.LineChart>
+                  </Rc.ResponsiveContainer>
+                </div>
+
+                <div className="card p-4">
+                  <h3 className="text-lg font-semibold mb-3">Convexity E''(σ)</h3>
+                  <Rc.ResponsiveContainer width="100%" height={240}>
+                    <Rc.LineChart data={convexityData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <Rc.CartesianGrid strokeDasharray="3 3" />
+                      <Rc.XAxis dataKey="sigma" />
+                      <Rc.YAxis />
+                      <Rc.Tooltip />
+                      <Rc.Legend />
+                      <Rc.ReferenceLine x={0.5} stroke="#111827" strokeDasharray="4 4" label="σ = 1/2" />
+                      <Rc.Line type="monotone" dataKey="secondDerivative" stroke="#10b981" strokeWidth={2} dot={false} />
+                    </Rc.LineChart>
+                  </Rc.ResponsiveContainer>
+                </div>
+
+                <div className="card p-4">
+                  <h3 className="text-lg font-semibold mb-3">Fractal Density Dₖ(σ)</h3>
+                  <Rc.ResponsiveContainer width="100%" height={240}>
+                    <Rc.LineChart data={densityData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <Rc.CartesianGrid strokeDasharray="3 3" />
+                      <Rc.XAxis dataKey="sigma" />
+                      <Rc.YAxis />
+                      <Rc.Tooltip />
+                      <Rc.Legend />
+                      <Rc.ReferenceLine x={0.5} stroke="#111827" strokeDasharray="4 4" label="σ = 1/2" />
+                      <Rc.Line type="monotone" dataKey="density" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                    </Rc.LineChart>
+                  </Rc.ResponsiveContainer>
+                </div>
+              </>
+            ) : (
+              <>
+                <SimpleLineChart data={energyData} xKey="sigma" yKey="energy" title="FTC Energy Functional E(σ)" color="#6366f1" />
+                <SimpleLineChart data={convexityData} xKey="sigma" yKey="secondDerivative" title="Convexity E''(σ)" color="#10b981" />
+                <SimpleLineChart data={densityData} xKey="sigma" yKey="density" title="Fractal Density Dₖ(σ)" color="#f59e0b" />
+              </>
+            )}
           </div>
-          <div className="p-4 bg-white rounded-xl border">
+
+          <div className="card p-4">
             <h3 className="text-lg font-semibold mb-2">Test Results</h3>
-            <pre className="whitespace-pre-wrap text-sm font-mono bg-white p-4 rounded border overflow-auto max-h-96">{results || 'Click “Run Tests” to begin FTC analysis…'}</pre>
+            <pre className="mono whitespace-pre-wrap text-sm bg-white p-4 rounded border overflow-auto max-h-96">{results || 'Click “Run Tests” to begin FTC analysis…'}</pre>
           </div>
         </div>
       );
     }
 
-    const ChartCard = ({ title, children }) => (
-      <div className="p-4 bg-white rounded-xl border">
-        <h3 className="text-lg font-semibold mb-3">{title}</h3>
-        {children}
-      </div>
-    );
-
+    // Mount & diagnostics
     try {
       const mount = document.getElementById('app');
       const root = ReactDOM.createRoot(mount);
       root.render(<RHProofTester />);
       const d = document.getElementById('diag');
-      if (d) d.innerHTML = `Diagnostics — React v${React.version} · Recharts: ${!!window.Recharts} · Babel: OK`;
+      const hasRecharts = !!window.Recharts;
+      if (d) d.innerHTML = `Diagnostics — React v${React.version} · Recharts: ${hasRecharts} · Babel: OK`;
     } catch (err) {
       console.error(err);
       const el = document.getElementById('app');
