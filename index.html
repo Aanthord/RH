@@ -5,40 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Post‑Cantorian RH — Single‑File Tester</title>
   <meta name="description" content="FTC/RSF falsifiability harness for RH — single‑file build" />
-  <!-- Tailwind (Play CDN) for quick styling -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React 18 UMD -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- Recharts UMD -->
-  <script crossorigin src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
-  <!-- Babel for on‑the‑fly JSX (single‑file savage mode) -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <style>
-    /* Just in case Tailwind fails to load, keep some sane defaults */
-    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
-    .card { border: 1px solid rgba(0,0,0,.08); border-radius: 16px; background: #fff; }
-    .mono { font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; }
-  </style>
+  <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
 </head>
 <body class="min-h-screen bg-neutral-100">
   <main class="max-w-7xl mx-auto p-6">
     <h1 class="text-3xl font-bold text-center mb-2">Post‑Cantorian RH Proof Tester</h1>
     <p class="text-center text-neutral-600 mb-6">FTC Recursive Integration · RSF Generation Symmetry · Single‑file</p>
-
     <div id="app"></div>
-
+    <div id="diag" class="mt-4 mx-auto max-w-3xl text-xs text-neutral-600"></div>
     <footer class="mt-10 text-center text-xs text-neutral-500">
-      Built savage‑style: one <code class="mono">index.html</code>. Powered by React + Recharts + Tailwind CDNs.
+      Built savage‑style: one <code>index.html</code>. Powered by React + Recharts + Tailwind CDNs.
     </footer>
   </main>
 
-  <script type="text/babel">
+  <script type="text/babel" data-presets="react,env">
     const { useState } = React;
-    const {
-      LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-      ResponsiveContainer, ReferenceLine
-    } = Recharts;
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } = Recharts;
 
     function RHProofTester() {
       const [energyData, setEnergyData] = useState([]);
@@ -50,23 +36,18 @@
       const [tMax, setTMax] = useState(30);
       const [tau, setTau] = useState(0.001);
 
-      // Config space growth
-      const computeConfigurationSpace = (depth) => depth * depth + depth;
-
-      // Recursive realizations (toy model)
-      const computeRecursiveRealizations = (_structure, sigma, t, depth) => {
+      const computeConfigurationSpace = depth => depth * depth + depth;
+      const computeRecursiveRealizations = (_s, sigma, t, depth) => {
         const u = sigma - 0.5;
         const base = Math.exp(-Math.abs(u) * depth);
         const osc = Math.cos(t / Math.sqrt(depth + 1));
         const mod = 1 / (1 + depth / 10);
-        const mult = Math.abs(u) > 0.01 ? 4 : 1; // quartet off‑line
+        const mult = Math.abs(u) > 0.01 ? 4 : 1;
         return Math.max(0.001, Math.abs(base * osc * mod) * mult);
       };
-
-      // Fractal density D_k ≈ weighted limit of F_i/G_i
-      const computeFractalDensity = (structure, sigma, t, maxDepthLocal = maxDepth) => {
+      const computeFractalDensity = (structure, sigma, t) => {
         let num = 0, den = 0;
-        for (let i = 1; i <= maxDepthLocal; i++) {
+        for (let i = 1; i <= maxDepth; i++) {
           const Fi = computeRecursiveRealizations(structure, sigma, t, i);
           const Gi = computeConfigurationSpace(i);
           const Di = Fi / Gi;
@@ -75,8 +56,6 @@
         }
         return num / den;
       };
-
-      // FTC recursive derivative in σ via layer differences
       const computeRecursiveDerivative = (sigma, t, h = 1e-3) => {
         let num = 0, den = 0;
         for (let n = 1; n <= maxDepth; n++) {
@@ -90,11 +69,7 @@
         }
         return num / den;
       };
-
-      // FTC‑admissible measure dμ(t)
-      const measure = (t) => Math.exp(-(t * t) / 100) * (1 + 0.1 * Math.sin(t / 5));
-
-      // Energy E(σ) = ∫ (∂σ L)^2 dμ × density factor
+      const measure = t => Math.exp(-(t * t) / 100) * (1 + 0.1 * Math.sin(t / 5));
       const energy = (sigma, tMaxLocal = tMax, pts = 200) => {
         let acc = 0;
         const dt = (2 * tMaxLocal) / pts;
@@ -105,8 +80,6 @@
         }
         return acc;
       };
-
-      // Smoothed second derivative via τ‑step
       const energySecond = (sigma, tauLocal = tau) => {
         const h = tauLocal;
         const Ep = energy(sigma + h);
@@ -125,46 +98,21 @@
           lines.push('=======================================================\n');
           lines.push(`Max Recursive Depth: ${maxDepth}`);
           lines.push(`tMax: ${tMax}, τ: ${tau}\n`);
-
           const sigmas = [0.1, 0.25, 0.4, 0.5, 0.6, 0.75, 0.9];
-
-          // Energy sweep
           const e = [];
           sigmas.forEach(s => { const v = energy(s, 20, 100); e.push({ sigma: s, energy: v }); lines.push(`E(${s}) = ${v.toFixed(6)}`); });
           setEnergyData(e);
-
-          // Convexity
-          lines.push('\nConvexity (E\'\'):');
           const c = [];
+          lines.push('\nConvexity (E\'\'):');
           sigmas.forEach(s => { const v = energySecond(s); c.push({ sigma: s, secondDerivative: v }); lines.push(`E''(${s}) = ${v.toFixed(6)} ${v >= -0.1 ? '✓' : '✗'}`); });
           setConvexityData(c);
-
-          // Density
-          lines.push('\nFractal Density D_k(σ):');
           const d = [];
+          lines.push('\nFractal Density D_k(σ):');
           sigmas.forEach(s => { const v = computeFractalDensity('energy', s, 0); d.push({ sigma: s, density: v }); lines.push(`D_k(${s}) = ${v.toFixed(6)}`); });
           setDensityData(d);
-
           setResults(lines.join('\n'));
           setIsComputing(false);
         }, 60);
-      };
-
-      const copyResults = async () => {
-        try { await navigator.clipboard.writeText(results || ''); } catch {}
-      };
-
-      const downloadCSV = () => {
-        const rows = ['type,sigma,value']
-          .concat(energyData.map(r => `energy,${r.sigma},${r.energy}`))
-          .concat(convexityData.map(r => `secondDerivative,${r.sigma},${r.secondDerivative}`))
-          .concat(densityData.map(r => `density,${r.sigma},${r.density}`));
-        const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'ftc_rh_results.csv';
-        a.click();
-        URL.revokeObjectURL(a.href);
       };
 
       return (
@@ -174,16 +122,11 @@
               {isComputing ? 'Computing FTC…' : 'Run Tests'}
             </button>
             <label className="text-sm">Max Depth: <input type="number" min="5" max="50" value={maxDepth} onChange={e=>setMaxDepth(parseInt(e.target.value||'0',10))} className="w-20 px-2 py-1 border rounded ml-1"/></label>
-            <label className="text-sm">tMax: <input type="number" min="10" max="60" value={tMax} onChange={e=>setTMax(parseInt(e.target.value||'0',10))} className="w-20 px-2 py-1 border rounded ml-1"/></label>
-            <label className="text-sm">τ: <input type="number" step="0.001" min="0.000" max="0.100" value={tau} onChange={e=>setTau(parseFloat(e.target.value||'0'))} className="w-24 px-2 py-1 border rounded ml-1"/></label>
-            <button onClick={copyResults} className="px-3 py-2 rounded-lg border bg-white hover:bg-neutral-50">Copy Results</button>
-            <button onClick={downloadCSV} className="px-3 py-2 rounded-lg border bg-white hover:bg-neutral-50">Download CSV</button>
           </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <ChartCard title="FTC Energy Functional E(σ)">
               <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={energyData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <LineChart data={energyData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="sigma" />
                   <YAxis />
@@ -194,10 +137,9 @@
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
-
             <ChartCard title="Convexity E''(σ)">
               <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={convexityData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <LineChart data={convexityData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="sigma" />
                   <YAxis />
@@ -208,10 +150,9 @@
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
-
             <ChartCard title="Fractal Density Dₖ(σ)">
               <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={densityData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <LineChart data={densityData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="sigma" />
                   <YAxis />
@@ -223,26 +164,32 @@
               </ResponsiveContainer>
             </ChartCard>
           </div>
-
-          <div className="card p-4">
+          <div className="p-4 bg-white rounded-xl border">
             <h3 className="text-lg font-semibold mb-2">Test Results</h3>
-            <pre className="mono whitespace-pre-wrap text-sm bg-white p-4 rounded border overflow-auto max-h-96">{results || 'Click “Run Tests” to begin FTC analysis…'}</pre>
+            <pre className="whitespace-pre-wrap text-sm font-mono bg-white p-4 rounded border overflow-auto max-h-96">{results || 'Click “Run Tests” to begin FTC analysis…'}</pre>
           </div>
         </div>
       );
     }
 
-    function ChartCard({ title, children }) {
-      return (
-        <div className="card p-4">
-          <h3 className="text-lg font-semibold mb-3">{title}</h3>
-          {children}
-        </div>
-      );
-    }
+    const ChartCard = ({ title, children }) => (
+      <div className="p-4 bg-white rounded-xl border">
+        <h3 className="text-lg font-semibold mb-3">{title}</h3>
+        {children}
+      </div>
+    );
 
-    const root = ReactDOM.createRoot(document.getElementById('app'));
-    root.render(<RHProofTester />);
+    try {
+      const mount = document.getElementById('app');
+      const root = ReactDOM.createRoot(mount);
+      root.render(<RHProofTester />);
+      const d = document.getElementById('diag');
+      if (d) d.innerHTML = `Diagnostics — React v${React.version} · Recharts: ${!!window.Recharts} · Babel: OK`;
+    } catch (err) {
+      console.error(err);
+      const el = document.getElementById('app');
+      if (el) el.innerHTML = `<div class="text-red-600">Failed to initialize app: ${String(err)}</div>`;
+    }
   </script>
 </body>
 </html>
