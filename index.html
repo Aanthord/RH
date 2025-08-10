@@ -8,7 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.min.js"></script>
+  <script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/recharts.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
 </head>
 <body class="min-h-screen bg-neutral-100">
@@ -24,7 +24,13 @@
 
   <script type="text/babel" data-presets="react,env">
     const { useState } = React;
-    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } = Recharts;
+    const R = window.Recharts;
+    if (!R) {
+      const d = document.getElementById('diag');
+      if (d) d.innerHTML = '<span class="text-red-600">Recharts failed to load. Check CDN URL or network.</span>';
+      throw new Error('Recharts not loaded');
+    }
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } = R;
 
     function RHProofTester() {
       const [energyData, setEnergyData] = useState([]);
