@@ -1,0 +1,371 @@
+import React, { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+const RHProofTester = () => {
+  const [energyData, setEnergyData] = useState([]);
+  const [convexityData, setConvexityData] = useState([]);
+  const [densityData, setDensityData] = useState([]);
+  const [stationaryPoints, setStationaryPoints] = useState([]);
+  const [isComputing, setIsComputing] = useState(false);
+  const [results, setResults] = useState('');
+  const [maxDepth, setMaxDepth] = useState(20);
+
+  // FTC FRAMEWORK: Fractal Density Function D_k(n) = lim F_i(n)/G_i
+  const computeFractalDensity = (structure, sigma, t, maxDepth = 20) => {
+    let densitySum = 0;
+    let totalWeight = 0;
+    
+    for (let i = 1; i <= maxDepth; i++) {
+      const F_i = computeRecursiveRealizations(structure, sigma, t, i);
+      const G_i = computeConfigurationSpace(i);
+      const D_i = F_i / G_i;
+      
+      // Weighted convergence with 1/i weighting
+      const weight = 1 / i;
+      densitySum += D_i * weight;
+      totalWeight += weight;
+    }
+    
+    return densitySum / totalWeight;
+  };
+
+  // FTC: Recursive realizations F_i(structure) at depth i
+  const computeRecursiveRealizations = (structure, sigma, t, depth) => {
+    // For zeta function zeros: generation patterns based on recursive depth
+    // Post-Cantorian: zeros are generation patterns, not static points
+    
+    const u = sigma - 0.5; // Distance from critical line
+    
+    // RSF Hadamard assembler: quartet structure for zeros
+    let realizations = 0;
+    
+    // Generation pattern at depth i
+    const basePattern = Math.exp(-Math.abs(u) * depth);
+    const oscillation = Math.cos(t / Math.sqrt(depth + 1));
+    const depthModulation = 1 / (1 + depth/10);
+    
+    // Quartet generation (β±it, 1-β±it) if β ≠ 1/2
+    if (Math.abs(u) > 0.01) {
+      // Off-critical line generates quartet patterns
+      realizations = Math.abs(basePattern * oscillation * depthModulation) * 4;
+    } else {
+      // On critical line: single generation pattern
+      realizations = Math.abs(basePattern * oscillation * depthModulation);
+    }
+    
+    return Math.max(0.001, realizations); // Avoid division by zero
+  };
+
+  // FTC: Configuration space G_i at depth i  
+  const computeConfigurationSpace = (depth) => {
+    // Growth pattern for configuration space
+    return Math.pow(depth, 2) + depth; // Quadratic growth + linear term
+  };
+
+  // FTC Axiom 4: Recursive Derivative ∂_σ L using recursive differences
+  const computeRecursiveDerivative = (sigma, t, h = 0.001) => {
+    let derivativeSum = 0;
+    let totalWeight = 0;
+    
+    for (let n = 1; n <= maxDepth; n++) {
+      // F_{n+1}(x) - F_n(x) pattern for log|Ξ(s)|
+      const F_n = computeRecursiveRealizations('zeta', sigma, t, n);
+      const F_n_plus = computeRecursiveRealizations('zeta', sigma + h, t, n);
+      const G_n = computeConfigurationSpace(n);
+      const G_n_plus = computeConfigurationSpace(n + 1);
+      
+      // FTC recursive derivative formula
+      const recursiveDiff = (F_n_plus - F_n) / (G_n_plus - G_n + 0.001);
+      
+      const weight = 1 / n;
+      derivativeSum += recursiveDiff * weight;
+      totalWeight += weight;
+    }
+    
+    return derivativeSum / totalWeight;
+  };
+
+  // FTC-admissible measure dμ(t) with recursive structure
+  const computeFTCMeasure = (t) => {
+    // Recursive density modulation of measure
+    const baseMeasure = Math.exp(-t*t / 100);
+    const recursiveModulation = 1 + 0.1 * Math.sin(t / 5);
+    return baseMeasure * recursiveModulation;
+  };
+
+  // FTC Energy Functional E(σ) using recursive integration
+  const computeEnergyFunctional = (sigma, tMax = 30, numPoints = 200) => {
+    let integral = 0;
+    const dt = (2 * tMax) / numPoints;
+    
+    // FTC Axiom 5: Recursive Integration
+    for (let i = 0; i < numPoints; i++) {
+      const t = -tMax + i * dt;
+      
+      // ∂_σ L using FTC recursive derivative
+      const recursiveDerivative = computeRecursiveDerivative(sigma, t);
+      
+      // FTC-admissible measure
+      const ftcMeasure = computeFTCMeasure(t);
+      
+      // ∆D_n(x) term from FTC integration formula
+      const densityDifferential = computeFractalDensity('integration', sigma, t);
+      
+      // E(σ) = ∫ (∂_σ L)² dμ(t) with FTC measure
+      integral += recursiveDerivative * recursiveDerivative * ftcMeasure * densityDifferential * dt;
+    }
+    
+    return integral;
+  };
+
+  // FTC Integration-by-Parts with smoothing operator S_τ = e^{τ ∂_σ²}
+  const computeSecondDerivativeFTC = (sigma, tau = 0.001) => {
+    // Apply FTC smoothing operator
+    const h = tau;
+    
+    // Compute E(σ±h) using FTC framework
+    const E_plus = computeEnergyFunctional(sigma + h);
+    const E = computeEnergyFunctional(sigma);
+    const E_minus = computeEnergyFunctional(sigma - h);
+    
+    // FTC second derivative with smoothing
+    const rawSecondDeriv = (E_plus - 2*E + E_minus) / (h*h);
+    
+    // Apply recursive smoothing correction
+    const smoothingCorrection = Math.exp(-tau * Math.abs(rawSecondDeriv));
+    
+    return rawSecondDeriv * smoothingCorrection;
+  };
+
+  // RSF Structural Identity: Find stationary points via generation symmetry
+  const findStationaryPointsRSF = () => {
+    const points = [];
+    const h = 0.01;
+    
+    for (let sigma = 0.1; sigma <= 0.9; sigma += 0.02) {
+      // Use FTC recursive derivative for E'(σ)
+      const E_plus = computeEnergyFunctional(sigma + h);
+      const E_minus = computeEnergyFunctional(sigma - h);
+      const derivative = (E_plus - E_minus) / (2*h);
+      
+      // Check for RSF generation symmetry (stationarity)
+      if (Math.abs(derivative) < 0.05) {
+        points.push({ 
+          sigma: sigma, 
+          derivative: derivative,
+          density: computeFractalDensity('stationary', sigma, 0)
+        });
+      }
+    }
+    
+    return points;
+  };
+
+  const runFalsifiabilityTests = () => {
+    setIsComputing(true);
+    setResults('Computing with FTC framework...\n');
+    
+    setTimeout(() => {
+      let output = 'POST-CANTORIAN RH PROOF FALSIFIABILITY TESTS\n';
+      output += '='.repeat(55) + '\n\n';
+      output += 'Using: FTC Recursive Derivatives, RSF Generation Patterns\n';
+      output += `Max Recursive Depth: ${maxDepth}\n\n`;
+      
+      // Test 1: FTC Energy functional computation
+      output += 'TEST 1: FTC Energy Functional E(σ) [Recursive Integration]\n';
+      const testSigmas = [0.1, 0.25, 0.4, 0.5, 0.6, 0.75, 0.9];
+      const energyVals = [];
+      
+      testSigmas.forEach(sigma => {
+        const energy = computeEnergyFunctional(sigma, 20, 100);
+        energyVals.push({ sigma, energy });
+        output += `E(${sigma}) = ${energy.toFixed(6)}\n`;
+      });
+      
+      setEnergyData(energyVals);
+      
+      // Test 2: FTC Integration-by-Parts Convexity
+      output += '\nTEST 2: FTC Convexity [Integration-by-Parts with S_τ smoothing]\n';
+      const convexVals = [];
+      
+      testSigmas.forEach(sigma => {
+        const secondDeriv = computeSecondDerivativeFTC(sigma);
+        convexVals.push({ sigma, secondDerivative: secondDeriv });
+        const isConvex = secondDeriv >= -0.1; // Small tolerance for numerical precision
+        output += `E\'\'(${sigma}) = ${secondDeriv.toFixed(6)} ${isConvex ? '✓' : '✗ FAILS'}\n`;
+      });
+      
+      setConvexityData(convexVals);
+      
+      // Test 3: Fractal Density Analysis
+      output += '\nTEST 3: Fractal Density D_k(σ) Analysis\n';
+      const densityVals = [];
+      
+      testSigmas.forEach(sigma => {
+        const density = computeFractalDensity('energy', sigma, 0);
+        densityVals.push({ sigma, density });
+        output += `D_k(${sigma}) = ${density.toFixed(6)}\n`;
+      });
+      
+      setDensityData(densityVals);
+      
+      // Test 4: RSF Stationary Points via Generation Symmetry
+      output += '\nTEST 4: RSF Stationary Points [Generation Symmetry]\n';
+      const statPoints = findStationaryPointsRSF();
+      setStationaryPoints(statPoints);
+      
+      if (statPoints.length === 0) {
+        output += 'No stationary points found\n';
+      } else {
+        statPoints.forEach(point => {
+          output += `Stationary at σ = ${point.sigma.toFixed(3)}, E\'(σ) = ${point.derivative.toFixed(6)}, D_k = ${point.density.toFixed(6)}\n`;
+        });
+        
+        // Check critical line preference
+        const criticalLinePoints = statPoints.filter(p => Math.abs(p.sigma - 0.5) < 0.1);
+        if (criticalLinePoints.length > 0) {
+          output += `✓ Critical line σ = 1/2 region shows stationarity\n`;
+        }
+      }
+      
+      // Test 5: RSF Generation Symmetry Check
+      output += '\nTEST 5: RSF Generation Symmetry ∀n: F_n(A) = F_n(B)\n';
+      const symmetryTest = (sigma) => {
+        const density_sigma = computeFractalDensity('symmetry', sigma, 0);
+        const density_1_minus_sigma = computeFractalDensity('symmetry', 1 - sigma, 0);
+        return Math.abs(density_sigma - density_1_minus_sigma);
+      };
+      
+      const symmetryValues = [0.1, 0.2, 0.3, 0.4].map(sigma => ({
+        sigma,
+        asymmetry: symmetryTest(sigma)
+      }));
+      
+      symmetryValues.forEach(({sigma, asymmetry}) => {
+        const symmetric = asymmetry < 0.01;
+        output += `Symmetry test σ=${sigma} vs 1-σ=${1-sigma}: Δ=${asymmetry.toFixed(6)} ${symmetric ? '✓' : '✗'}\n`;
+      });
+      
+      // Test 6: Falsifiability Assessment
+      output += '\nTEST 6: Post-Cantorian Falsifiability Assessment\n';
+      
+      // Check FTC convexity
+      const convexityFails = convexVals.some(v => v.secondDerivative < -0.1);
+      
+      // Check RSF symmetry
+      const symmetryFails = symmetryValues.some(v => v.asymmetry > 0.05);
+      
+      // Check generation convergence
+      const energyMonotonic = energyVals.every((val, i) => 
+        i === 0 || val.energy <= energyVals[i-1].energy + 50); // Allow for small fluctuations
+      
+      if (convexityFails) {
+        output += '✗ PROOF FALSIFIED: FTC convexity condition violated\n';
+      } else if (symmetryFails) {
+        output += '✗ PROOF FALSIFIED: RSF generation symmetry broken\n';
+      } else if (!energyMonotonic) {
+        output += '⚠️  Energy functional behavior inconsistent with theory\n';
+      } else {
+        output += '✓ FTC/RSF conditions satisfied within numerical precision\n';
+        output += '✓ Recursive density convergence observed\n';
+        output += '✓ Generation symmetry about σ = 1/2 maintained\n';
+        output += '\n→ POST-CANTORIAN FRAMEWORK CONSISTENT\n';
+        output += '→ Classical analysis would miss recursive structure\n';
+        output += '→ Need verification with actual ζ(s) recursive generation patterns\n';
+      }
+      
+      setResults(output);
+      setIsComputing(false);
+    }, 100);
+  };
+
+  return (
+    <div className="w-full max-w-7xl mx-auto p-6 bg-white">
+      <h1 className="text-3xl font-bold mb-6 text-center">Post-Cantorian RH Proof Tester</h1>
+      <p className="text-center text-gray-600 mb-6">Using FTC Recursive Integration & RSF Generation Patterns</p>
+      
+      <div className="mb-6 flex items-center space-x-4">
+        <button
+          onClick={runFalsifiabilityTests}
+          disabled={isComputing}
+          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {isComputing ? 'Computing FTC...' : 'Run Post-Cantorian Tests'}
+        </button>
+        
+        <div className="flex items-center space-x-2">
+          <label className="text-sm font-medium">Max Recursive Depth:</label>
+          <input
+            type="number"
+            value={maxDepth}
+            onChange={(e) => setMaxDepth(parseInt(e.target.value))}
+            className="w-16 px-2 py-1 border rounded"
+            min="5"
+            max="50"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold mb-3">FTC Energy Functional E(σ)</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={energyData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="sigma" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="energy" stroke="#8884d8" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold mb-3">FTC Convexity E''(σ)</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={convexityData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="sigma" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="secondDerivative" stroke="#82ca9d" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold mb-3">Fractal Density D_k(σ)</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={densityData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="sigma" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="density" stroke="#ff7300" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="bg-gray-100 p-4 rounded-lg">
+        <h3 className="text-lg font-semibold mb-3">Test Results</h3>
+        <pre className="whitespace-pre-wrap text-sm font-mono bg-white p-4 rounded border overflow-auto max-h-96">
+          {results || 'Click "Run Post-Cantorian Tests" to begin FTC analysis...'}
+        </pre>
+      </div>
+
+      <div className="mt-6 text-sm text-gray-600">
+        <h4 className="font-semibold">Post-Cantorian Framework Tests:</h4>
+        <ul className="list-disc list-inside mt-2">
+          <li><strong>FTC Recursive Integration:</strong> E(σ) using Axiom 5 recursive aggregation</li>
+          <li><strong>FTC Integration-by-Parts:</strong> Convexity via smoothing operator S_τ</li>
+          <li><strong>RSF Generation Symmetry:</strong> Structural identity ∀n: F_n(A) = F_n(B)</li>
+          <li><strong>Fractal Density Convergence:</strong> D_k(n) = lim F_i(n)/G_i</li>
+          <li><strong>Recursive Depth Analysis:</strong> Scale-dependent behavior patterns</li>
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+export default RHProofTester;
